@@ -1,3 +1,4 @@
+import json
 import re
 
 from elasticpedia.config.elastic_conf import ElasticConfig
@@ -100,4 +101,5 @@ class TurtleReader:
         return self._ttl_as_rdd(data_files_path) \
             .map(lambda rdf_tup: self._line_to_doc(rdf_tup, redirects)) \
             .filter(bool) \
-            .reduceByKey(lambda d1, d2: {k: d1.get(k, []) + d2.get(k, []) for k in {*d1, *d2}})
+            .reduceByKey(lambda d1, d2: {k: d1.get(k, []) + d2.get(k, []) for k in {*d1, *d2}}) \
+            .map(lambda x: (x[0], json.dumps({**{ElasticConfig.Fields.URI.value: x[0]}, **x[1]})))
