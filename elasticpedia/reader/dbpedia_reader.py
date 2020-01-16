@@ -1,5 +1,6 @@
 import json
 import re
+from urllib.parse import unquote_plus
 
 from elasticpedia.config.elastic_conf import ElasticConfig
 from elasticpedia.spark.session import *
@@ -10,6 +11,7 @@ class TurtleReader:
     def __init__(self):
         self._predicate2field = {
             "http://lexvo.org/ontology#label": ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value,
+            "http://www.w3.org/2000/01/rdf-schema#label": ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value,
             "http://dbpedia.org/property/refCount": ElasticConfig.Fields.REFCOUNT.value,
             "http://dbpedia.org/ontology/abstract": ElasticConfig.Fields.DESCRIPTION.value,
             "http://www.w3.org/2000/01/rdf-schema#comment": ElasticConfig.Fields.DESCRIPTION.value,
@@ -50,7 +52,7 @@ class TurtleReader:
 
     def _line_to_pair(self, rdf_tup, redirects):
         """
-        Create a pair (subj: {pred: [obj]}), given a tuple (subj, pred, obj) (subj and obj
+        Create a pair (subj, {pred: [obj]}), given a tuple (subj, pred, obj) (subj and obj
         are swapped when pred = redirect).
         Throw an Exception in the pred is not known.
         :param rdf_tup: a triple (subj, pred, obj)
@@ -71,6 +73,34 @@ class TurtleReader:
                 return obj, {field: [uri]}
             else:
                 return uri, {field: [obj]}
+
+    @staticmethod
+    def _reduce_pairs_to_doc(p1, p2):
+        """
+        Merge two dicts that contain only lists as values.
+        :param p1:
+        :param p2:
+        :return:
+        """
+        return {k: p1.get(k, []) + p2.get(k, []) for k in {*p1, *p2}}
+
+    @staticmethod
+    def _doc_to_json(row):
+        """
+        Convert documents to JSONs. Documents are also extended with
+        new surface forms.
+        :param row:
+        :return:
+        """
+        uri, doc = row
+        doc[ElasticConfig.Fields.URI.value] = uri
+        if ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value not in doc:
+            doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value] = []
+        doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value].append(
+            unquote_plus(uri.replace("http://dbpedia.org/resource/", "")))
+        doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value] = list(
+            set(doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value]))
+        return uri, json.dumps(doc)
 
     def _get_redirects(self, redirects_files_path):
         """
@@ -102,5 +132,5 @@ class TurtleReader:
         return self._ttl_as_rdd(data_files_path) \
             .map(lambda rdf_tup: self._line_to_pair(rdf_tup, redirects)) \
             .filter(bool) \
-            .reduceByKey(lambda d1, d2: {k: d1.get(k, []) + d2.get(k, []) for k in {*d1, *d2}}) \
-            .map(lambda x: (x[0], json.dumps({**{ElasticConfig.Fields.URI.value: x[0]}, **x[1]})))
+            .reduceByKey(self._reduce_pairs_to_doc) \
+            .map(self._doc_to_json)
