@@ -1,21 +1,21 @@
 import re
 
-from elasticpedia.config.elastic_conf import Fields
-from elasticpedia.spark import get_spark
+from elasticpedia.config.elastic_conf import ElasticConfig
+from elasticpedia.spark.session import *
 
 
-class DBpediaReader:
+class TurtleReader:
 
     def __init__(self):
         self._predicate2field = {
-            "http://lexvo.org/ontology#label": Fields.SURFACE_FORM_KEYWORD.value,  # dataset to to be created
-            "http://dbpedia.org/property/refCount": Fields.REFCOUNT.value,  # dataset to to be created
-            "http://dbpedia.org/ontology/abstract": Fields.DESCRIPTION.value,
-            "http://www.w3.org/2000/01/rdf-schema#comment": Fields.DESCRIPTION.value,
-            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type": Fields.CLASS.value,
-            "http://purl.org/dc/terms/subject": Fields.CATEGORY.value,
-            "http://dbpedia.org/property/wikiPageUsesTemplate": Fields.TEMPLATE.value,  # not really necessary
-            "http://dbpedia.org/ontology/wikiPageRedirects": Fields.REDIRECT.value  # not really necessary
+            "http://lexvo.org/ontology#label": ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value,
+            "http://dbpedia.org/property/refCount": ElasticConfig.Fields.REFCOUNT.value,
+            "http://dbpedia.org/ontology/abstract": ElasticConfig.Fields.DESCRIPTION.value,
+            "http://www.w3.org/2000/01/rdf-schema#comment": ElasticConfig.Fields.DESCRIPTION.value,
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type": ElasticConfig.Fields.CLASS.value,
+            "http://purl.org/dc/terms/subject": ElasticConfig.Fields.CATEGORY.value,
+            "http://dbpedia.org/property/wikiPageUsesTemplate": ElasticConfig.Fields.TEMPLATE.value,
+            "http://dbpedia.org/ontology/wikiPageRedirects": ElasticConfig.Fields.REDIRECT.value
         }
 
         self._regex = re.compile('^<(\S+)> <(\S+)> ["<]([\s\S]+)[">]')
@@ -65,7 +65,7 @@ class DBpediaReader:
         field = self._predicate2field[pred]
 
         if len(redirects) == 0 or uri not in redirects:
-            if field == Fields.REDIRECT.value:
+            if field == ElasticConfig.Fields.REDIRECT.value:
                 return obj, {field: [uri]}
             else:
                 return uri, {field: [obj]}
@@ -86,9 +86,9 @@ class DBpediaReader:
 
         return rdd.map(lambda x: x[0]).distinct().collect()
 
-    def get_documents(self, data_files_path, redirects_files_path=None):
+    def get_documents_rdd(self, data_files_path, redirects_files_path):
         """
-        Convert .ttl triples in documents to be indexed.
+        Return the RDD containing the documents to be indexed.
         :param data_files_path: path to a file, or to a directory with many files in (e.g., /dbpedia/redirects/*)
         :param redirects_files_path: path to a file, or to a directory with many files in (e.g., /dbpedia/redirects/*).
         Redirected entities are discarded.
@@ -100,5 +100,4 @@ class DBpediaReader:
         return self._ttl_as_rdd(data_files_path) \
             .map(lambda rdf_tup: self._line_to_doc(rdf_tup, redirects)) \
             .filter(bool) \
-            .reduceByKey(lambda d1, d2: {k: d1.get(k, []) + d2.get(k, []) for k in {*d1, *d2}}) \
-            .collect()
+            .reduceByKey(lambda d1, d2: {k: d1.get(k, []) + d2.get(k, []) for k in {*d1, *d2}})
