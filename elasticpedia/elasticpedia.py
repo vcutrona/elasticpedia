@@ -9,7 +9,7 @@ class DBpediaIndexer:
         self._config = es_config.get_config()
         self._reader = TurtleReader()
 
-    def index(self, data_files_path, redirects_files_path):
+    def index(self, data_files_path, redirects_files_path=None):
         self._reader.get_documents_rdd(data_files_path, redirects_files_path).saveAsNewAPIHadoopFile(
             path='-',
             outputFormatClass="org.elasticsearch.hadoop.mr.EsOutputFormat",
