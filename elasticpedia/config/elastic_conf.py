@@ -21,7 +21,7 @@ class ElasticConfig:
         SURFACE_FORM_PREFIX = "surface_form_prefix"
         REFCOUNT = "ref_count"
         DESCRIPTION = "description"
-        CLASS = "class"
+        TYPE = "type"
         CATEGORY = "category"
         TEMPLATE = "template"
         REDIRECT = "redirect"

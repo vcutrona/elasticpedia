@@ -13,7 +13,7 @@ class TurtleReader:
             "http://dbpedia.org/property/refCount": ElasticConfig.Fields.REFCOUNT.value,
             "http://dbpedia.org/ontology/abstract": ElasticConfig.Fields.DESCRIPTION.value,
             "http://www.w3.org/2000/01/rdf-schema#comment": ElasticConfig.Fields.DESCRIPTION.value,
-            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type": ElasticConfig.Fields.CLASS.value,
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type": ElasticConfig.Fields.TYPE.value,
             "http://purl.org/dc/terms/subject": ElasticConfig.Fields.CATEGORY.value,
             "http://dbpedia.org/property/wikiPageUsesTemplate": ElasticConfig.Fields.TEMPLATE.value,
             "http://dbpedia.org/ontology/wikiPageRedirects": ElasticConfig.Fields.REDIRECT.value
@@ -48,9 +48,10 @@ class TurtleReader:
             .rdd \
             .map(self._parse_ttl_line)
 
-    def _line_to_doc(self, rdf_tup, redirects):
+    def _line_to_pair(self, rdf_tup, redirects):
         """
-        Create a document, given a tuple (subj, pred, obj),
+        Create a pair (subj: {pred: [obj]}), given a tuple (subj, pred, obj) (subj and obj
+        are swapped when pred = redirect).
         Throw an Exception in the pred is not known.
         :param rdf_tup: a triple (subj, pred, obj)
         :param redirects: a list of redirected entities
@@ -99,7 +100,7 @@ class TurtleReader:
         if redirects_files_path:
             redirects = self._get_redirects(redirects_files_path)
         return self._ttl_as_rdd(data_files_path) \
-            .map(lambda rdf_tup: self._line_to_doc(rdf_tup, redirects)) \
+            .map(lambda rdf_tup: self._line_to_pair(rdf_tup, redirects)) \
             .filter(bool) \
             .reduceByKey(lambda d1, d2: {k: d1.get(k, []) + d2.get(k, []) for k in {*d1, *d2}}) \
             .map(lambda x: (x[0], json.dumps({**{ElasticConfig.Fields.URI.value: x[0]}, **x[1]})))
