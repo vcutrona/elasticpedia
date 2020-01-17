@@ -4,6 +4,7 @@ from urllib.parse import unquote_plus
 
 from elasticpedia.config.elastic_conf import ElasticConfig
 from elasticpedia.spark.session import *
+from elasticpedia.utils.string_utils import clean_space, split_camelcase
 
 
 class TurtleReader:
@@ -85,7 +86,24 @@ class TurtleReader:
         return {k: p1.get(k, []) + p2.get(k, []) for k in {*p1, *p2}}
 
     @staticmethod
-    def _doc_to_json(row):
+    def _surface_forms_from_uri(uri):
+        """
+        Return a set of some possible surface forms for a given URI.
+        :param uri:
+        :return:
+        """
+        label = unquote_plus(uri.replace("http://dbpedia.org/resource/", ""))
+        clean = clean_space(label)
+        no_camel_case = split_camelcase(clean)
+        return list({label,
+                     clean,
+                     no_camel_case,
+                     label.lower(),
+                     clean.lower(),
+                     no_camel_case.lower()
+                     })
+
+    def _doc_to_json(self, row):
         """
         Convert documents to JSONs. Documents are also extended with
         new surface forms.
@@ -96,10 +114,9 @@ class TurtleReader:
         doc[ElasticConfig.Fields.URI.value] = uri
         if ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value not in doc:
             doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value] = []
-        doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value].append(
-            unquote_plus(uri.replace("http://dbpedia.org/resource/", "")))
-        doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value] = list(
-            set(doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value]))
+        doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value] = \
+            list({*doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value] + self._surface_forms_from_uri(uri)})
+
         return uri, json.dumps(doc)
 
     def _get_redirects(self, redirects_files_path):
