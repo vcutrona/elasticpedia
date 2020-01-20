@@ -1,3 +1,4 @@
+import os
 from enum import Enum
 
 
@@ -9,8 +10,9 @@ class ElasticConfig:
                  port: int = 9200,
                  input_json: str = "yes",
                  mapping_id: str = None):
-        self._nodes = nodes
-        self._port = port
+
+        self._nodes = os.getenv("ELASTIC_NODES") if os.getenv("ELASTIC_NODES") else nodes
+        self._port = os.getenv("ELASTIC_PORT") if os.getenv("ELASTIC_PORT") else port
         self._resource = resource
         self._input_json = input_json
         self._mapping_id = mapping_id
