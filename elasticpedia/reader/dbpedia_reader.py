@@ -1,6 +1,8 @@
-import json
-import re
+from itertools import chain
 from urllib.parse import unquote_plus
+
+import pyspark.sql.functions as F
+from pyspark.sql.types import StringType, MapType, ArrayType
 
 from elasticpedia.config.elastic_conf import ElasticConfig
 from elasticpedia.spark.session import *
@@ -22,132 +24,113 @@ class TurtleReader:
             "http://dbpedia.org/ontology/wikiPageRedirects": ElasticConfig.Fields.REDIRECT.value
         }
 
-        self._regex = re.compile('^<(\S+)> <(\S+)> ["<]([\s\S]+)[">]')
-
-    def _parse_ttl_line(self, line):
+    @staticmethod
+    def _ttl_as_df(files_path):
         """
-        Convert a line of a .ttl into a tuple (subj, pred, obj).
-        :param line: a line of a .ttl file.
-        :return:
-        """
-        s = self._regex.match(line.value)
-        return s.group(1), s.group(2), s.group(3)
-
-    def _ttl_as_rdd(self, files_path):
-        """
-        Create an RDD from .ttl files contained in the given directory.
+        Create a DataFrame from .ttl files contained in the given directory.
         Comments are filtered out and the RDD is already sorted.
-        :param files_path: path to a file, or to a directory with many files in (e.g., /dbpedia/all_data/*)
+        The DataFrame containes 3 cols: subj, pred, obj
+        :param files_path: path to .ttl file(s) (e.g., /dbpedia/all_data/*.ttl)
         :return:
         """
+        ttl_regex = r'^<(\S+)> <(\S+)> ["<]([^">]+)[">].* '
+
         df = get_spark() \
             .read \
             .text(files_path)
 
         return df \
             .filter(~df.value.startswith('#')) \
-            .drop_duplicates() \
-            .orderBy(df.value) \
-            .rdd \
-            .map(self._parse_ttl_line)
-
-    def _line_to_pair(self, rdf_tup, redirects):
-        """
-        Create a pair (subj, {pred: [obj]}), given a tuple (subj, pred, obj) (subj and obj
-        are swapped when pred = redirect).
-        Throw an Exception in the pred is not known.
-        :param rdf_tup: a triple (subj, pred, obj)
-        :param redirects: a list of redirected entities
-        :return:
-        """
-        uri = rdf_tup[0]
-        pred = rdf_tup[1]
-        obj = rdf_tup[2]
-
-        if pred not in self._predicate2field:
-            raise Exception(f'No existing mapping for predicate: {pred}')
-
-        field = self._predicate2field[pred]
-
-        if len(redirects) == 0 or uri not in redirects:
-            if field == ElasticConfig.Fields.REDIRECT.value:
-                return obj, {field: [uri]}
-            else:
-                return uri, {field: [obj]}
+            .dropDuplicates() \
+            .select(F.regexp_extract(df.value, ttl_regex, 1).alias('subj'),
+                    F.regexp_extract(df.value, ttl_regex, 2).alias('pred'),
+                    F.regexp_extract(df.value, ttl_regex, 3).alias('obj'))
 
     @staticmethod
-    def _reduce_pairs_to_doc(p1, p2):
+    def _extend_surface_forms(uri, doc):
         """
-        Merge two dicts that contain only lists as values.
-        :param p1:
-        :param p2:
-        :return:
-        """
-        return {k: p1.get(k, []) + p2.get(k, []) for k in {*p1, *p2}}
-
-    @staticmethod
-    def _surface_forms_from_uri(uri):
-        """
-        Return a set of some possible surface forms for a given URI.
+        Extend a doc by adding: (i) the uri of the entity, and (ii) new surface forms
         :param uri:
+        :param doc:
         :return:
         """
         label = unquote_plus(uri.replace("http://dbpedia.org/resource/", ""))
         clean = clean_space(label)
         no_camel_case = split_camelcase(clean)
-        return list({label,
-                     clean,
-                     no_camel_case,
-                     label.lower(),
-                     clean.lower(),
-                     no_camel_case.lower()
-                     })
+        labels = list({label,
+                       clean,
+                       no_camel_case,
+                       label.lower(),
+                       clean.lower(),
+                       no_camel_case.lower()
+                       })
 
-    def _doc_to_json(self, row):
-        """
-        Convert documents to JSONs. Documents are also extended with
-        new surface forms.
-        :param row:
-        :return:
-        """
-        uri, doc = row
-        doc[ElasticConfig.Fields.URI.value] = uri
         if ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value not in doc:
             doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value] = []
         doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value] = \
-            list({*doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value] + self._surface_forms_from_uri(uri)})
+            list({*doc[ElasticConfig.Fields.SURFACE_FORM_KEYWORD.value] + labels})
 
-        return uri, json.dumps(doc)
+        return doc
 
     def _get_redirects(self, redirects_files_path):
         """
         Return the list of all the entities that are redirected to a main entity.
         All the files contained in the target directory must contain only triples
         with <http://dbpedia.org/ontology/wikiPageRedirects> as pred.
-        :param redirects_files_path: path a one file, or to a directory with many files in (e.g., /dbpedia/redirects/*)
+        :param redirects_files_path: path to .ttl file(s) (e.g., /dbpedia/redirects/*.ttl)
         :return:
         """
-        rdd = self._ttl_as_rdd(redirects_files_path).cache()
-        errors = rdd.filter(lambda x: x[1] != 'http://dbpedia.org/ontology/wikiPageRedirects').collect()
+        df = self._ttl_as_df(redirects_files_path).cache()
+        errors = df.select('pred').distinct().collect()
 
-        if len(errors) > 0:
-            raise Exception(f'predicate must be http://dbpedia.org/ontology/wikiPageRedirects')
+        if not (len(errors) == 1 and errors[0].pred == 'http://dbpedia.org/ontology/wikiPageRedirects'):
+            raise Exception(f'Predicate must be http://dbpedia.org/ontology/wikiPageRedirects ({errors[0]} given).')
 
-        return rdd.map(lambda x: x[0]).distinct().collect()
+        return df.select('subj').distinct().collect()
 
-    def get_documents_rdd(self, data_files_path, redirects_files_path):
+    def get_documents_df(self, data_files_path, redirects_files_path):
         """
-        Return the RDD containing the documents to be indexed.
-        :param data_files_path: path to a file, or to a directory with many files in (e.g., /dbpedia/redirects/*)
-        :param redirects_files_path: path to a file, or to a directory with many files in (e.g., /dbpedia/redirects/*).
+        Return the RDD containing the documents to be indexed. If redirects are provided, they
+        will be filtered out.
+        :param data_files_path: path to .ttl file(s) (e.g., /dbpedia/all_data/*.ttl)
+        :param redirects_files_path:  path to .ttl file(s) (e.g., /dbpedia/redirects/*.ttl).
         Redirected entities are discarded.
         :return:
         """
+        # Read data
+        df = self._ttl_as_df(data_files_path)
+
+        # Filter redirected entities, if any
         redirects = []
         if redirects_files_path:
-            redirects = self._get_redirects(redirects_files_path)
-        return self._ttl_as_rdd(data_files_path) \
-            .map(lambda rdf_tup: self._line_to_pair(rdf_tup, redirects)) \
-            .filter(bool) \
-            .reduceByKey(self._reduce_pairs_to_doc) \
-            .map(self._doc_to_json)
+            redirects = [row.subj for row in self._get_redirects(redirects_files_path)]
+        df = df .filter(~df.subj.isin(redirects))
+
+        # Replace RDF properties with index fields names
+        mapping = F.create_map([F.lit(x) for x in chain(*self._predicate2field.items())])
+        df = df \
+            .withColumn('pred', mapping[df.pred]) \
+            .dropna()  # remove unknown properties
+
+        # Swap subj and obj when pred = redirect (store the relation as subj hasRedirect obj)
+        df = df \
+            .withColumn('subj_new', F.when(df.pred != ElasticConfig.Fields.REDIRECT.value, df.subj).otherwise(df.obj)) \
+            .withColumn('obj_new', F.when(df.pred != ElasticConfig.Fields.REDIRECT.value, df.obj).otherwise(df.subj)) \
+            .drop('subj', 'obj') \
+            .select(F.col('subj_new').alias('subj'), F.col('pred'), F.col('obj_new').alias('obj'))
+
+        # Group by subj,pred (multi-value predicates)
+        df = df \
+            .groupBy('subj', 'pred') \
+            .agg(F.collect_list('obj').alias("obj"))
+
+        # Create a document (dict) for each entity (subj)
+        df = df \
+            .groupBy('subj') \
+            .agg(F.map_from_entries(F.collect_list(F.struct("pred", "obj"))).alias("doc"))
+
+        # Extend the doc with the URI, new surface forms and convert it to a JSON.
+        extend_surface_forms = F.udf(self._extend_surface_forms, MapType(StringType(), ArrayType(StringType())))
+        df = df.withColumn('doc', extend_surface_forms('subj', 'doc'))
+
+        return df
