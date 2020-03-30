@@ -10,7 +10,7 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = ['Click>=7.0', 'pyspark']
+requirements = ['Click>=7.0', 'pyspark==2.4.4']
 
 setup_requirements = []
 
@@ -21,7 +21,7 @@ setup(
     author_email='v.cutrona1@gmail.com',
     python_requires='>=3.6, <3.8',
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: Apache Software License',
         'Natural Language :: English',
