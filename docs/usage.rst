@@ -1,3 +1,5 @@
+.. highlight:: shell
+
 =====
 Usage
 =====
@@ -46,6 +48,7 @@ Use Elasticpedia in your project (e.g., index.py)::
 Run your project:
 
 .. code-block:: console
+
     $ spark-submit --jars ./elasticsearch-spark-20_2.11-7.5.1.jar index.py
 
 Usage with Docker
@@ -111,6 +114,7 @@ Here is an example of docker-compose file with ElasticSearch 7.5.1 and Spark 2.4
 Run the following command to run the application with 1 master and 3 workers:
 
 .. code-block:: console
+
     $ docker-compose up -d --scale spark-worker=3
 
 .. _BDE Docker Spark image: https://github.com/big-data-europe/docker-spark
