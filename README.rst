@@ -37,7 +37,7 @@ Credits
 -------
 If you use this package for your research work, please cite:
 
-    Cutrona, Vincenzo. (2020, March 30). Elasticpedia v1.0.0 (Version v1.0.0). Zenodo. |DOI|
+    Cutrona, Vincenzo. (2020, April 21). Elasticpedia v1.0.1 (Version v1.0.1). Zenodo. |DOI|
 
 This package was derived from the DBpedia indexer provided by the `DBpedia Lookup project`_.
 
