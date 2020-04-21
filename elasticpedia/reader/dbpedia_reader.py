@@ -33,7 +33,7 @@ class TurtleReader:
         :param files_path: path to .ttl file(s) (e.g., /dbpedia/all_data/*.ttl)
         :return:
         """
-        ttl_regex = r'^<(\S+)> <(\S+)> ["<]([^">]+)[">].* '
+        ttl_regex = r'^<(\S+)> <(\S+)> ["<](.+)[">](@\w+)?\s*\.'
 
         df = get_spark() \
             .read \

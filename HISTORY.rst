@@ -2,6 +2,11 @@
 History
 =======
 
+1.0.1 (2020-04-21)
+------------------
+
+* [BUG-FIX] Update regex for triples parsing (handle escaped chars in Literals).
+
 1.0.0 (2020-03-30)
 ------------------
 

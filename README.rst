@@ -3,19 +3,20 @@ Elasticpedia
 ============
 
 
-.. image:: https://img.shields.io/pypi/v/elasticpedia.svg
-        :target: https://pypi.python.org/pypi/elasticpedia
+.. |pypi|   image:: https://img.shields.io/pypi/v/elasticpedia.svg
+            :target: https://pypi.python.org/pypi/elasticpedia
 
-.. image:: https://img.shields.io/travis/vcutrona/elasticpedia.svg
-        :target: https://travis-ci.org/vcutrona/elasticpedia
+.. |build|  image:: https://img.shields.io/travis/vcutrona/elasticpedia.svg
+            :target: https://travis-ci.org/vcutrona/elasticpedia
 
-.. image:: https://readthedocs.org/projects/elasticpedia/badge/?version=latest
-        :target: https://elasticpedia.readthedocs.io/en/latest/?badge=latest
-        :alt: Documentation Status
+.. |docs|   image:: https://readthedocs.org/projects/elasticpedia/badge/?version=latest
+            :target: https://elasticpedia.readthedocs.io/en/latest/?badge=latest
+            :alt: Documentation Status
 
-.. image:: https://zenodo.org/badge/233836358.svg
-        :target: https://zenodo.org/badge/latestdoi/233836358
+.. |DOI|    image:: https://zenodo.org/badge/233836358.svg
+            :target: https://zenodo.org/badge/latestdoi/233836358
 
+|pypi| |build| |docs| |DOI|
 
 
 Indexing DBpedia with Elasticsearch.
@@ -36,7 +37,7 @@ Credits
 -------
 If you use this package for your research work, please cite:
 
-    Cutrona, Vincenzo. (2020, March 30). Elasticpedia v1.0.0 (Version v1.0.0). Zenodo. http://doi.org/10.5281/zenodo.3733562
+    Cutrona, Vincenzo. (2020, March 30). Elasticpedia v1.0.0 (Version v1.0.0). Zenodo. |DOI|
 
 This package was derived from the DBpedia indexer provided by the `DBpedia Lookup project`_.
 
