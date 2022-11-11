@@ -10,7 +10,7 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = ['Click>=7.0', 'pyspark==2.4.4']
+requirements = ['Click>=7.0', 'pyspark==3.2.2']
 
 setup_requirements = []
 
